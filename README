@@ -1,0 +1,23 @@
+Author:         Roland L. Galibert
+Subject:        CSCI E-28 Assignment 6 (wsng)
+Date:           May 2, 2015
+
+A) ASSIGNMENT CONTENTS
+wsng.c			Main program including server initialization, main loop to receive requests, and Unix system calls to handle requests.
+wsng.h			Header file for wsng.c
+conf.c			Data structures and functions for initializing and accessing server configuration parameters.
+conf.h			Header file for conf.c
+httplib.c		Data structures and functions to support the transmission of HTTP responses
+httplib.h		Header file for httplib.c
+urllib.c		Data structures and functions to parse the HTTP request/URL into separate request, URL (directory/file) and query string parameter components that can be easily accessed.
+urllib.h		Header file for urllib.c
+flexstr.c, flexstr.h	Unchanged from version originally provided for smsh assignment.
+socklib.c, socklib.h	Unchanged from version originally provided for smsh assignment
+splitline.c, splitline.h - Essentially unchanged from version originally provided for smsh assignment (I deleted an "#include "smsh.h" statement)
+Outline			Assignment design document
+README			This file.
+Makefile
+
+MAKE INSTRUCTIONS
+make / make all - creates wsng executable.
+make clean - removes wsng executable and all object files.

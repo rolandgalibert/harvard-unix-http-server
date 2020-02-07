@@ -1,0 +1,116 @@
+Subject:	CSCI E-28 Assignment 6 Design Document (wsng)
+Author:		Roland L. Galibert
+Date:		May 2, 2015
+
+PURPOSE OF THE PROGRAM
+The purpose of this program is to implement a basic HTTP server which includes the functionality described in the assignment document. The server:
+	- Handles GET and HEAD commands
+	- Supports a subset of the HTTP response statuses described in RFC 1945
+	- Allows for the use of a configuration file for specifying essential web server parameters, including the content types supported by the server as well as the server's name, port, etc.
+	- Supports query parameters passed through the GET URL (i.e., those following a ? following the actual description of the resource)
+	- Automatically redirects, in the case of a directory request and per the specifications in the assignment, to any index.html or index.cgi file that may exist in the specified directory, and will otherwise display the contents of the directory.
+	- Displays directory contents as links, allowing for easy access to a directory's files and subdirectories.
+The program also calls fork() to be able to handle separate client requests without blocking subsequent requests, and also implements functionality to avoid zombie processes by handling SIGCHLD signals from completed child processes.
+
+Usage:  wsng [-c config_file]
+
+MAIN FUNCTIONAL UNITS AND INTERACTION
+The program is broken up into the following main units, described further below:
+  - wsng.c/wsng.h - Main program including server initialization, main loop to receive requests, and Unix system calls to handle requests.
+  - conf.c/conf.h - Data structures and functions for initializing and accessing server configuration parameters.
+  - httplib.c/httplib.h - Data structures and functions to support the transmission of HTTP responses.
+  - urllib.c/urllib.h - Data structures and functions to parse the HTTP request/URL into separate request, URL (directory/file) and query string parameter components that can be easily accessed.
+
+The program also makes use of the following files from class, essentially unchanged (I deleted a "#include smsh.h" statement from splitline.c).
+flexstr.c/flexstr.h
+socklib.c/socklib.h
+splitline.c/splitline.h
+
+wsng.c/wsng.h
+Although I made a number of changes to bring the main program in line with the new organization as well as signal handling for SIGCHLD, the basic algorithm in wsng.c is the same as in ws.c, and retains some of the original functions and code. Some new functions in wsng.c include:
+  - General initialization/exit functions:
+        int proc_cmd_line(int argc, char *argv[])
+        int load_config_file(int argc, char *argv[])
+        int wsng_init(), int wsng_exit()
+  - SIGCHLD handling variables/functions (I implemented the first (easy) solution suggested in the assignment to avoid zombies)
+        struct sigaction orig_sigchld_handler;
+        int init_sigchld();
+        void handle_sigchld();
+  - index.html/index.cgi/default directory handing function
+        void process_dir(struct http_request *http_request, FILE *fp)
+  - File/directory handling functions
+        int file_exists(char *directory, char *file) // Returns 1 if directory/file exists, 0 otherwise
+        void format_dir(FLEXSTR *directory) // Updates directory to include a final / if it does not already have one
+Credits:
+  - My code for calculating the MD5 sum of a file is based on the sample code I found on stackoverflow, at http://stackoverflow.com/questions/10324611/how-to-calculate-the-md5-hash-of-a-large-file-in-c
+  - My scandir/alphasort algorithm in the function print_ls_html() is based on the example in man scandir
+        
+conf.c/conf.h
+The functions/structures defined in these files provide for a table of server parameters which are normally configured from the values in the specified command line configuration file, though default server values are provided in conf.h in the event a configuration file is not specified.
+
+Currently server parameters, such as port and server name, are handled separately from content types supported. conf.c and conf.h are based on the following structures, with appropriate creation/access functions provided in conf.c:
+
+General server configuration:
+struct conf_record {
+        char *name;
+        char *value;
+        struct conf_record *next;
+};
+struct conf_record *conf_table; // Main configuration table, in conf.c
+
+Content types:
+struct content_type_table {
+        char *default_content_type;
+        struct content_type_record *first_record;
+};
+struct content_type_record {
+        char *file_type;
+        char *content_type;
+        struct content_type_record *next;
+};
+struct content_type_table *content_type_table;  // Main content type table, in conf.c
+
+Server parameters can therefore be accessed using calls such as get_conf_value(CONF_PORT), get_content_type(CONF_CONTENT_TYPE_DEFAULT), get_content_type("html"), etc.
+
+httplib.c/httplib.h
+These files provide functions which make it easy to send HTTP responses and to ensure these responses follow the status descriptions defined in RFC 1945. The main structure is a constant array of status codes/descriptions based on the follow struct:
+
+struct http_resp_status {
+        char *code;
+        char *desc;
+};
+
+The functions provided in httplib.c allow for the following header types to be written to the specified FILE pointer *fp:
+Response status/description
+Date
+Server (as well as a function for printing the "official" server name, using the gethostname() function provided in the original code)
+Content-Type
+Content-Length
+Content-Language (as well as a function specifically for Content-Language: en)
+Content-MD5
+Upgrade (HTTP version update request)
+
+urllib.c/urllib.h
+These files provide functions which parse out the original HTTP request (mainly the URI provided) and store its separate components in a structure which allows them to be easily accessed. This structure is:
+
+struct http_request {
+        int type;       /* HTTP_REQ_GET, HTTP_REQ_HEAD, HTTP_REQ_POST, HTTP_REQ_PUT, HTTP_REQ_DELETE */
+        char *resource; /* Entire URI */
+        char *version;  /* HTTP version in request */
+        char *file;     /* URI File/directory specification */
+        struct url_parm *parms; /* List of query parameters, if any */
+};
+
+With a related structure for query parameters:
+struct url_parm {
+        char *name;
+        char *value;
+        struct url_parm *next;
+};
+
+The system will accept multiple query parameters in either the form ?parm_name=parm_value... or ?parm_value_only... (in the event of the latter url_parm.name is set to NULL).
+
+Error handling
+Command line parms - wsng flags the usual input errors for command line parms (incorrect option specifier, non-existent file, etc.)
+
+The server also maintains the functionality in the original program for returning 400 status codes. Failed system calls (e.g. a failed lstat()) are flagged by returning a 401, 403 or 500 status codes as appropriate.
